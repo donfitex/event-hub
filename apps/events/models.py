@@ -7,6 +7,16 @@ from django.utils.text import slugify
 from apps.common.validators import image_path, validate_image
 
 
+class Category(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    slug = models.SlugField(unique=True, blank=True)
+
+    def save(self, *args, **kwargs):
+        self.slug = self.slug or slugify(self.name)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.name
 
 
 class Event(models.Model):
@@ -22,6 +32,7 @@ class Event(models.Model):
     organizer = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="events"
     )
+    category = models.ForeignKey(Category, on_delete=models.PROTECT, related_name="events")
     location = models.CharField(max_length=200)
     venue = models.CharField(max_length=200)
     start_datetime = models.DateTimeField(db_index=True)
@@ -48,20 +59,6 @@ class Event(models.Model):
             ),
         ]
 
-    def clean(self):
-        errors = {}
-        if self.end_datetime and self.start_datetime and self.end_datetime <= self.start_datetime:
-            errors["end_datetime"] = "End must follow start."
-        if (
-            self.registration_deadline
-            and self.start_datetime
-            and self.registration_deadline > self.start_datetime
-        ):
-            errors["registration_deadline"] = "Deadline must be before start."
-        if self.capacity is not None and self.capacity < 1:
-            errors["capacity"] = "Capacity must be positive."
-        if errors:
-            raise ValidationError(errors)
 
     def save(self, *args, **kwargs):
         self.slug = self.slug or f"{slugify(self.title)[:190]}-{uuid4().hex[:8]}"
