@@ -1,0 +1,33 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: eventhub
+      POSTGRES_USER: eventhub
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+    ports: ["127.0.0.1:5432:5432"]
+    volumes: ["postgres_data:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U eventhub"]
+      interval: 5s
+      retries: 10
+  redis:
+    image: redis:7-alpine
+    ports: ["127.0.0.1:6379:6379"]
+  web:
+    build: .
+    command: python manage.py runserver 0.0.0.0:8000
+    environment:
+      DJANGO_SETTINGS_MODULE: config.development
+      DB_HOST: db
+      DB_NAME: eventhub
+      DB_USER: eventhub
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+    ports: ["127.0.0.1:8000:8000"]
+    volumes: ["media:/app/media"]
+    depends_on:
+      db:
+        condition: service_healthy
+volumes:
+  postgres_data:
+  media:
