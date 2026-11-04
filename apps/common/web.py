@@ -301,3 +301,12 @@ def attendees(request, pk):
         "attendees.html",
         {"event": event, "page": Paginator(qs, 50).get_page(request.GET.get("page"))},
     )
+
+
+def health(request):
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+        return JsonResponse({"status": "ok", "database": "ok"})
+    except Exception:
+        return JsonResponse({"status": "unavailable"}, status=503)
