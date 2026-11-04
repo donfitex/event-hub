@@ -1,7 +1,6 @@
-from pathlib import Path
+from .base import *  # noqa
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-SECRET_KEY = "local-development-only"
+SECRET_KEY = SECRET_KEY or "development-only-key-do-not-use-in-production"
 DEBUG = True
-ROOT_URLCONF = "config.urls"
+ALLOWED_HOSTS = ["localhost", "127.0.0.1", "testserver"]
 DATABASES = {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": BASE_DIR / "db.sqlite3"}}
