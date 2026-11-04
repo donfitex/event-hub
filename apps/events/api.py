@@ -212,8 +212,46 @@ class Events(viewsets.ModelViewSet):
         page = self.paginate_queryset(qs)
         return self.get_paginated_response(self.get_serializer(page, many=True).data)
 
+    @action(detail=False)
+    def dashboard(self, request):
+        qs = self.get_queryset().filter(organizer=request.user)
+        return Response(
+            {
+                "events": qs.count(),
+                "published": qs.filter(status="PUBLISHED").count(),
+                "completed": qs.filter(status="COMPLETED").count(),
+                "registrations": Registration.objects.filter(
+                    event__organizer=request.user, status="REGISTERED"
+                ).count(),
+            }
+        )
 
+    @action(detail=True, url_path="registrations")
+    def attendees(self, request, pk=None):
+        event = self.owned()
+        qs = event.registrations.select_related("event", "user")
+        if request.query_params.get("search"):
+            qs = qs.filter(user__email__icontains=request.query_params["search"])
+        page = self.paginate_queryset(qs)
+        return self.get_paginated_response(RegistrationSerializer(page, many=True).data)
 
+    @action(detail=True, url_path="registrations/export")
+    def export(self, request, pk=None):
+        event = self.owned()
+        response = HttpResponse(content_type="text/csv")
+        response["Content-Disposition"] = 'attachment; filename="attendees.csv"'
+        writer = csv.writer(response)
+        writer.writerow(["Email", "Status", "Registered at"])
+        for r in event.registrations.select_related("user").iterator():
+            email = r.user.email
+            writer.writerow(
+                [
+                    "'" + email if email.startswith(("=", "+", "-", "@", "\t", "\r")) else email,
+                    r.status,
+                    r.registered_at.isoformat(),
+                ]
+            )
+        return response
 
 
 class Registrations(viewsets.ReadOnlyModelViewSet):
