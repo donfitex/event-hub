@@ -1,0 +1,132 @@
+import csv
+from django.http import HttpResponse
+from django.db import transaction
+from django.db.models import Q, Count
+from rest_framework import serializers, viewsets, permissions, filters
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.exceptions import PermissionDenied, ValidationError
+from .models import Event, Category
+
+
+class Organizer(permissions.BasePermission):
+    def has_permission(self, request, view):
+        return bool(
+            request.user.is_authenticated and (request.user.is_organizer or request.user.is_staff)
+        )
+
+
+class CategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Category
+        fields = ["id", "name", "slug"]
+        read_only_fields = ["slug"]
+
+
+class Categories(viewsets.ModelViewSet):
+    queryset = Category.objects.order_by("name")
+    serializer_class = CategorySerializer
+
+    def get_permissions(self):
+        cls = (
+            permissions.AllowAny
+            if self.action in ["list", "retrieve"]
+            else permissions.IsAdminUser
+            if self.action in ["destroy", "update", "partial_update"]
+            else Organizer
+        )
+        return [cls()]
+
+
+class EventSerializer(serializers.ModelSerializer):
+    registration_count = serializers.IntegerField(read_only=True)
+    organizer_name = serializers.CharField(source="organizer.get_full_name", read_only=True)
+    category_name = serializers.CharField(source="category.name", read_only=True)
+
+    class Meta:
+        model = Event
+        fields = [
+            "id",
+            "title",
+            "slug",
+            "description",
+            "organizer",
+            "organizer_name",
+            "category",
+            "category_name",
+            "location",
+            "venue",
+            "start_datetime",
+            "end_datetime",
+            "registration_deadline",
+            "capacity",
+            "status",
+            "image",
+            "registration_count",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["slug", "organizer", "status", "created_at", "updated_at"]
+
+    def validate(self, data):
+        from django.conf import settings
+
+        if settings.PREVIEW_MODE and data.get("image"):
+            raise ValidationError({"image": "Uploads are disabled on the free preview host."})
+        instance = self.instance or Event()
+        candidate = Event()
+        for field in Event._meta.concrete_fields:
+            if not field.primary_key:
+                setattr(candidate, field.attname, getattr(instance, field.attname))
+        for key, value in data.items():
+            setattr(candidate, key, value)
+        candidate.clean()
+        return data
+
+
+
+
+class Events(viewsets.ModelViewSet):
+    serializer_class = EventSerializer
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ["title", "description", "location", "venue"]
+    ordering_fields = ["start_datetime", "created_at", "title"]
+
+    def get_queryset(self):
+        qs = Event.objects.select_related("organizer", "category").annotate(
+            registration_count=Count("registrations", filter=Q(registrations__status="REGISTERED"))
+        )
+        user = self.request.user
+        if not user.is_staff:
+            visible = Q(status__in=["PUBLISHED", "CANCELLED", "COMPLETED"])
+            if user.is_authenticated:
+                visible |= Q(organizer=user)
+            qs = qs.filter(visible)
+        for name, lookup in [
+            ("category", "category__slug"),
+            ("location", "location__icontains"),
+            ("status", "status"),
+            ("date_from", "start_datetime__date__gte"),
+            ("date_to", "start_datetime__date__lte"),
+        ]:
+            if self.request.query_params.get(name):
+                value = self.request.query_params[name]
+                if name.startswith("date_"):
+                    from datetime import date
+
+                    try:
+                        date.fromisoformat(value)
+                    except ValueError:
+                        raise ValidationError({name: "Use YYYY-MM-DD."})
+                qs = qs.filter(**{lookup: value})
+        return qs.order_by("start_datetime", "pk")
+
+    def get_permissions(self):
+        cls = (
+            permissions.AllowAny
+            if self.action in ["list", "retrieve"]
+            else permissions.IsAuthenticated
+            if self.action == "register"
+            else Organizer
+        )
+        return [cls()]
