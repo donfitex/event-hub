@@ -130,3 +130,24 @@ class Events(viewsets.ModelViewSet):
             else Organizer
         )
         return [cls()]
+
+    def owned(self):
+        event = self.get_object()
+        if event.organizer_id != self.request.user.pk and not self.request.user.is_staff:
+            raise PermissionDenied("Only the event owner can manage this event.")
+        return event
+
+    def perform_create(self, serializer):
+        serializer.save(organizer=self.request.user)
+
+
+
+
+
+
+
+    @action(detail=False)
+    def mine(self, request):
+        qs = self.filter_queryset(self.get_queryset().filter(organizer=request.user))
+        page = self.paginate_queryset(qs)
+        return self.get_paginated_response(self.get_serializer(page, many=True).data)
