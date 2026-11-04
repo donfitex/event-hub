@@ -2,7 +2,7 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework.exceptions import APIException
 from apps.events.models import Event
-from .models import Registration
+from .models import Registration, Notification
 
 
 class Conflict(APIException):
@@ -10,6 +10,12 @@ class Conflict(APIException):
     default_code = "conflict"
 
 
+def notify(registration, subject):
+    Notification.objects.create(
+        recipient=registration.user.email,
+        subject=subject,
+        body=f"{subject}: {registration.event.title}. Visit your EventHub dashboard for details.",
+    )
 
 
 def lock_event(pk):
@@ -31,6 +37,10 @@ def register(user, event_id):
     registration = Registration.objects.create(
         user=user, event=event, status="REGISTERED" if count < event.capacity else "WAITLISTED"
     )
+    notify(
+        registration,
+        "Registration confirmed" if registration.status == "REGISTERED" else "Added to waitlist",
+    )
     return registration
 
 
@@ -51,6 +61,7 @@ def cancel(registration_id):
     registration.status = "CANCELLED"
     registration.cancelled_at = timezone.now()
     registration.save()
+    notify(registration, "Registration cancelled")
     if was_registered and event.status == "PUBLISHED" and event.start_datetime > timezone.now():
         next_up = (
             event.registrations.select_for_update()
@@ -61,6 +72,7 @@ def cancel(registration_id):
         if next_up:
             next_up.status = "REGISTERED"
             next_up.save()
+            notify(next_up, "Your waitlist place is confirmed")
     return registration
 
 
@@ -83,4 +95,5 @@ def transition(event_id, status):
             registration.status = "CANCELLED"
             registration.cancelled_at = timezone.now()
             registration.save()
+            notify(registration, "Event cancelled")
     return event
