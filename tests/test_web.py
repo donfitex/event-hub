@@ -37,6 +37,12 @@ def test_website_journey(client, event):
     assert r.status == "CANCELLED"
 
 
+def test_csrf(event, user):
+    from django.test import Client
+
+    client = Client(enforce_csrf_checks=True)
+    client.force_login(user)
+    assert client.post(f"/events/{event.pk}/register/").status_code == 403
 
 
 def test_organizer_pages(client, event, owner):
@@ -50,6 +56,11 @@ def test_organizer_pages(client, event, owner):
         assert client.get(path).status_code == 200
 
 
+def test_security_headers(client, user):
+    response = client.get("/")
+    assert "script-src 'self'" in response["Content-Security-Policy"]
+    client.force_login(user)
+    assert "no-store" in client.get("/dashboard/")["Cache-Control"]
 
 
 def test_outbox_delivery(event, user):
