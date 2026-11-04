@@ -126,7 +126,15 @@ REST_FRAMEWORK = {
     },
     "NUM_PROXIES": int(os.getenv("NUM_PROXIES", "0")),
 }
-SPECTACULAR_SETTINGS = {"TITLE": "EventHub API", "VERSION": "1.0.0", "SERVE_INCLUDE_SCHEMA": False}
+SPECTACULAR_SETTINGS = {
+    "TITLE": "EventHub API",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "POSTPROCESSING_HOOKS": [
+        "drf_spectacular.hooks.postprocess_schema_enums",
+        "apps.common.schema.document_envelope",
+    ],
+}
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,

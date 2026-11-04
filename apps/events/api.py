@@ -1,7 +1,13 @@
 import csv
 from django.http import HttpResponse
 from django.db import transaction
-from django.db.models import Q, Count
+from django.db.models import Q, Count, ProtectedError
+from drf_spectacular.utils import (
+    OpenApiParameter,
+    extend_schema,
+    extend_schema_view,
+    inline_serializer,
+)
 from rest_framework import serializers, viewsets, permissions, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -38,6 +44,12 @@ class Categories(viewsets.ModelViewSet):
             else Organizer
         )
         return [cls()]
+
+    def perform_destroy(self, instance):
+        try:
+            instance.delete()
+        except ProtectedError as exc:
+            raise Conflict("This category is used by an event.") from exc
 
 
 class EventSerializer(serializers.ModelSerializer):
@@ -105,6 +117,16 @@ class RegistrationSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+EVENT_FILTERS = [
+    OpenApiParameter("category", str, description="Category slug."),
+    OpenApiParameter("location", str, description="Case-insensitive substring."),
+    OpenApiParameter("status", str, enum=list(Event.Status.values)),
+    OpenApiParameter("date_from", str, description="Inclusive start date (YYYY-MM-DD)."),
+    OpenApiParameter("date_to", str, description="Inclusive end date (YYYY-MM-DD)."),
+]
+
+
+@extend_schema_view(list=extend_schema(parameters=EVENT_FILTERS))
 class Events(viewsets.ModelViewSet):
     serializer_class = EventSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
@@ -183,35 +205,53 @@ class Events(viewsets.ModelViewSet):
             raise Conflict("Only empty drafts can be deleted.")
         event.delete()
 
+    @extend_schema(
+        request=None,
+        responses={201: RegistrationSerializer},
+        description="Reserve a seat or join the FIFO waitlist.",
+    )
     @action(detail=True, methods=["post"])
     def register(self, request, pk=None):
         self.get_object()
         return Response(RegistrationSerializer(register(request.user, pk)).data, status=201)
 
+    @extend_schema(request=None, responses={200: EventSerializer})
     @action(detail=True, methods=["post"])
     def publish(self, request, pk=None):
         self.owned()
         transition(pk, "PUBLISHED")
         return Response(self.get_serializer(self.get_object()).data)
 
+    @extend_schema(request=None, responses={200: EventSerializer})
     @action(detail=True, methods=["post"])
     def cancel(self, request, pk=None):
         self.owned()
         transition(pk, "CANCELLED")
         return Response(self.get_serializer(self.get_object()).data)
 
+    @extend_schema(request=None, responses={200: EventSerializer})
     @action(detail=True, methods=["post"])
     def complete(self, request, pk=None):
         self.owned()
         transition(pk, "COMPLETED")
         return Response(self.get_serializer(self.get_object()).data)
 
+    @extend_schema(parameters=EVENT_FILTERS, responses=EventSerializer(many=True))
     @action(detail=False)
     def mine(self, request):
         qs = self.filter_queryset(self.get_queryset().filter(organizer=request.user))
         page = self.paginate_queryset(qs)
         return self.get_paginated_response(self.get_serializer(page, many=True).data)
 
+    @extend_schema(
+        responses=inline_serializer(
+            name="OrganizerDashboard",
+            fields={
+                key: serializers.IntegerField()
+                for key in ("events", "published", "completed", "registrations")
+            },
+        )
+    )
     @action(detail=False)
     def dashboard(self, request):
         qs = self.get_queryset().filter(organizer=request.user)
@@ -226,7 +266,11 @@ class Events(viewsets.ModelViewSet):
             }
         )
 
-    @action(detail=True, url_path="registrations")
+    @extend_schema(
+        parameters=[OpenApiParameter("search", str, description="Attendee email substring.")],
+        responses=RegistrationSerializer(many=True),
+    )
+    @action(detail=True, url_path="registrations", filter_backends=[])
     def attendees(self, request, pk=None):
         event = self.owned()
         qs = event.registrations.select_related("event", "user")
@@ -235,6 +279,7 @@ class Events(viewsets.ModelViewSet):
         page = self.paginate_queryset(qs)
         return self.get_paginated_response(RegistrationSerializer(page, many=True).data)
 
+    @extend_schema(responses={(200, "text/csv"): str})
     @action(detail=True, url_path="registrations/export")
     def export(self, request, pk=None):
         event = self.owned()
@@ -265,6 +310,7 @@ class Registrations(viewsets.ReadOnlyModelViewSet):
         qs = Registration.objects.select_related("event", "user")
         return qs if self.request.user.is_staff else qs.filter(user=self.request.user)
 
+    @extend_schema(request=None, responses={200: RegistrationSerializer})
     @action(detail=True, methods=["post"])
     def cancel(self, request, pk=None):
         self.get_object()

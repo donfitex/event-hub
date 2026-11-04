@@ -1,5 +1,6 @@
 from datetime import timedelta
 from django.conf import settings
+from drf_spectacular.utils import extend_schema, inline_serializer
 from django.utils import timezone
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers, generics, permissions
@@ -53,6 +54,25 @@ class Login(APIView):
     throttle_scope = "login"
     serializer_class = SignupSerializer
 
+    @extend_schema(
+        request=inline_serializer(
+            name="LoginCredentials",
+            fields={
+                "email": serializers.EmailField(),
+                "password": serializers.CharField(write_only=True),
+            },
+        ),
+        responses={
+            200: inline_serializer(
+                name="LoginResult",
+                fields={
+                    "token": serializers.CharField(),
+                    "user": UserSerializer(),
+                },
+            )
+        },
+        description="Local authentication only. Managed Neon deployments return MANAGED_AUTH.",
+    )
     def post(self, request):
         if settings.NEON_AUTH_BASE_URL:
             return Response(
@@ -85,6 +105,11 @@ class Logout(APIView):
     serializer_class = UserSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    @extend_schema(
+        request=None,
+        responses={204: None},
+        description="End the Django session and revoke any local API token. Neon tokens expire independently.",
+    )
     def post(self, request):
         Token.objects.filter(user=request.user).delete()
         from django.contrib.auth import logout
