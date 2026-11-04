@@ -102,3 +102,18 @@ def test_proxy_preserves_cookie_expiry(client, identity, monkeypatch):
     assert result.status_code == 200
     assert result.cookies["neon-auth.session_token"]["max-age"] == 3600
     assert result.cookies["neon-auth.session_token"]["httponly"]
+
+
+def test_django_admin_can_sign_in_to_organizer_site(client, identity):
+    admin = User.objects.create_superuser("staff@example.com", "Strong!Password2026")
+    page = client.get("/login/", follow=True)
+    assert b"/admin/login/?next=/organizer/" in page.content
+
+    response = client.post(
+        "/admin/login/?next=/organizer/",
+        {"username": admin.email, "password": "Strong!Password2026", "next": "/organizer/"},
+        follow=True,
+    )
+    assert response.redirect_chain[-1][0] == "/organizer/"
+    assert response.status_code == 200
+    assert client.get("/login/?next=/organizer/")["Location"] == "/organizer/"

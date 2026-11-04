@@ -39,6 +39,8 @@ class SecureLoginForm(AuthenticationForm):
 
 class Signin(LoginView):
     def dispatch(self, request, *args, **kwargs):
+        if request.method == "GET" and request.user.is_authenticated:
+            return redirect(self.get_success_url())
         if settings.NEON_AUTH_BASE_URL:
             from urllib.parse import urlencode
 
