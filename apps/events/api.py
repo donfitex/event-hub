@@ -6,6 +6,8 @@ from rest_framework import serializers, viewsets, permissions, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied, ValidationError
+from apps.registrations.models import Registration
+from apps.registrations.services import register, cancel, transition, Conflict
 from .models import Event, Category
 
 
@@ -84,6 +86,23 @@ class EventSerializer(serializers.ModelSerializer):
         return data
 
 
+class RegistrationSerializer(serializers.ModelSerializer):
+    event_title = serializers.CharField(source="event.title", read_only=True)
+    user_email = serializers.EmailField(source="user.email", read_only=True)
+
+    class Meta:
+        model = Registration
+        fields = [
+            "id",
+            "user",
+            "user_email",
+            "event",
+            "event_title",
+            "status",
+            "registered_at",
+            "cancelled_at",
+        ]
+        read_only_fields = fields
 
 
 class Events(viewsets.ModelViewSet):
@@ -140,11 +159,52 @@ class Events(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(organizer=self.request.user)
 
+    @transaction.atomic
+    def update(self, request, *args, **kwargs):
+        event = self.owned()
+        event = Event.objects.select_for_update().get(pk=event.pk)
+        if event.status in ["CANCELLED", "COMPLETED"]:
+            raise Conflict("This event can no longer be edited.")
+        serializer = self.get_serializer(
+            event, data=request.data, partial=kwargs.get("partial", False)
+        )
+        serializer.is_valid(raise_exception=True)
+        capacity = serializer.validated_data.get("capacity", event.capacity)
+        if capacity < event.registrations.filter(status="REGISTERED").count():
+            raise Conflict("Capacity cannot be below confirmed registrations.")
+        serializer.save()
+        return Response(serializer.data)
 
+    @transaction.atomic
+    def perform_destroy(self, instance):
+        event = self.owned()
+        event = Event.objects.select_for_update().get(pk=event.pk)
+        if event.status != "DRAFT" or event.registrations.exists():
+            raise Conflict("Only empty drafts can be deleted.")
+        event.delete()
 
+    @action(detail=True, methods=["post"])
+    def register(self, request, pk=None):
+        self.get_object()
+        return Response(RegistrationSerializer(register(request.user, pk)).data, status=201)
 
+    @action(detail=True, methods=["post"])
+    def publish(self, request, pk=None):
+        self.owned()
+        transition(pk, "PUBLISHED")
+        return Response(self.get_serializer(self.get_object()).data)
 
+    @action(detail=True, methods=["post"])
+    def cancel(self, request, pk=None):
+        self.owned()
+        transition(pk, "CANCELLED")
+        return Response(self.get_serializer(self.get_object()).data)
 
+    @action(detail=True, methods=["post"])
+    def complete(self, request, pk=None):
+        self.owned()
+        transition(pk, "COMPLETED")
+        return Response(self.get_serializer(self.get_object()).data)
 
     @action(detail=False)
     def mine(self, request):
