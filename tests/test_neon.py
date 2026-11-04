@@ -107,7 +107,7 @@ def test_proxy_preserves_cookie_expiry(client, identity, monkeypatch):
 def test_django_admin_can_sign_in_to_organizer_site(client, identity):
     admin = User.objects.create_superuser("staff@example.com", "Strong!Password2026")
     page = client.get("/login/", follow=True)
-    assert b"/admin/login/?next=/organizer/" in page.content
+    assert b"/admin/login/" not in page.content
 
     response = client.post(
         "/admin/login/?next=/organizer/",
