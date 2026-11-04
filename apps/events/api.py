@@ -211,3 +211,23 @@ class Events(viewsets.ModelViewSet):
         qs = self.filter_queryset(self.get_queryset().filter(organizer=request.user))
         page = self.paginate_queryset(qs)
         return self.get_paginated_response(self.get_serializer(page, many=True).data)
+
+
+
+
+
+class Registrations(viewsets.ReadOnlyModelViewSet):
+    queryset = Registration.objects.none()
+    serializer_class = RegistrationSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return Registration.objects.none()
+        qs = Registration.objects.select_related("event", "user")
+        return qs if self.request.user.is_staff else qs.filter(user=self.request.user)
+
+    @action(detail=True, methods=["post"])
+    def cancel(self, request, pk=None):
+        self.get_object()
+        return Response(self.get_serializer(cancel(pk)).data)
