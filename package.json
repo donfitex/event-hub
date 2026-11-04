@@ -1,0 +1,1 @@
+{"name":"eventhub-auth-assets","private":true,"scripts":{"build":"esbuild frontend/auth.js --bundle --format=esm --minify --outfile=static/js/auth.js"},"dependencies":{"@neondatabase/auth":"latest"},"devDependencies":{"esbuild":"^0.25.0"}}

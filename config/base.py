@@ -102,6 +102,7 @@ SECURE_CONTENT_TYPE_NOSNIFF = True
 API_TOKEN_TTL_DAYS = 14
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
+        "apps.users.authentication.ExpiringTokenAuthentication",
         "rest_framework.authentication.SessionAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticatedOrReadOnly"],
@@ -134,4 +135,5 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 1024 * 1024
 NEON_AUTH_BASE_URL = os.getenv("NEON_AUTH_BASE_URL", "").rstrip("/")
 NEON_AUTH_JWKS_URL = os.getenv("NEON_AUTH_JWKS_URL", "")
 PREVIEW_MODE = os.getenv("PREVIEW_MODE") == "1"
+REST_FRAMEWORK["DEFAULT_AUTHENTICATION_CLASSES"].insert(0, "apps.users.neon.NeonAuthentication")
 
