@@ -112,6 +112,38 @@ def public_events(request):
     )
 
 
+def detail(request, pk):
+    qs = Event.objects.select_related("category", "organizer")
+    if not request.user.is_staff:
+        visible = ~Q(status="DRAFT")
+        if request.user.is_authenticated:
+            visible |= Q(organizer=request.user)
+        qs = qs.filter(visible)
+    event = get_object_or_404(qs, pk=pk)
+    count = event.registrations.filter(status="REGISTERED").count()
+    registration = (
+        event.registrations.filter(user=request.user).exclude(status="CANCELLED").first()
+        if request.user.is_authenticated
+        else None
+    )
+    from django.utils import timezone
+
+    available = (
+        event.status == "PUBLISHED"
+        and event.registration_deadline > timezone.now()
+        and event.start_datetime > timezone.now()
+    )
+    return render(
+        request,
+        "detail.html",
+        {
+            "event": event,
+            "count": count,
+            "remaining": max(0, event.capacity - count),
+            "registration": registration,
+            "available": available,
+        },
+    )
 
 
 def signup(request):
@@ -137,8 +169,33 @@ def signup(request):
 
 
 
+@login_required
+@require_POST
+def register_event(request, pk):
+    get_object_or_404(Event, pk=pk, status="PUBLISHED")
+    try:
+        registration = register(request.user, pk)
+        messages.success(
+            request,
+            "You are on the waitlist."
+            if registration.status == "WAITLISTED"
+            else "Your place is confirmed!",
+        )
+    except APIException as exc:
+        messages.error(request, str(exc.detail))
+    return redirect("detail", pk=pk)
 
 
+@login_required
+@require_POST
+def cancel_registration(request, pk):
+    registration = get_object_or_404(Registration, pk=pk, user=request.user)
+    try:
+        cancel(registration.pk)
+        messages.success(request, "Registration cancelled.")
+    except APIException as exc:
+        messages.error(request, str(exc.detail))
+    return redirect("dashboard")
 
 
 def can_organize(user):
