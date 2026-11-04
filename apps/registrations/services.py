@@ -28,9 +28,9 @@ def register(user, event_id):
     if Registration.objects.filter(user=user, event=event).exclude(status="CANCELLED").exists():
         raise Conflict("You already registered for this event.", code="duplicate_registration")
     count = event.registrations.filter(status="REGISTERED").count()
-    if count >= event.capacity:
-        raise Conflict("Event is at capacity.")
-    registration = Registration.objects.create(user=user, event=event, status="REGISTERED")
+    registration = Registration.objects.create(
+        user=user, event=event, status="REGISTERED" if count < event.capacity else "WAITLISTED"
+    )
     return registration
 
 
@@ -47,9 +47,20 @@ def cancel(registration_id):
         raise Conflict("Registration already cancelled.")
     if event.start_datetime <= timezone.now():
         raise Conflict("Cancellation is closed after the event starts.")
+    was_registered = registration.status == "REGISTERED"
     registration.status = "CANCELLED"
     registration.cancelled_at = timezone.now()
     registration.save()
+    if was_registered and event.status == "PUBLISHED" and event.start_datetime > timezone.now():
+        next_up = (
+            event.registrations.select_for_update()
+            .filter(status="WAITLISTED")
+            .select_related("user", "event")
+            .first()
+        )
+        if next_up:
+            next_up.status = "REGISTERED"
+            next_up.save()
     return registration
 
 
