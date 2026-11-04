@@ -12,11 +12,13 @@ class Conflict(APIException):
 
 
 
+def lock_event(pk):
+    return Event.objects.select_for_update().get(pk=pk)
 
 
 @transaction.atomic
 def register(user, event_id):
-    event = Event.objects.get(pk=event_id)
+    event = lock_event(event_id)
     if (
         event.status != Event.Status.PUBLISHED
         or event.registration_deadline <= timezone.now()
@@ -36,7 +38,7 @@ def register(user, event_id):
 
 @transaction.atomic
 def transition(event_id, status):
-    event = Event.objects.get(pk=event_id)
+    event = lock_event(event_id)
     allowed = {"DRAFT": {"PUBLISHED", "CANCELLED"}, "PUBLISHED": {"CANCELLED", "COMPLETED"}}
     if status not in allowed.get(event.status, set()):
         raise Conflict("Invalid event status transition.")
