@@ -59,6 +59,20 @@ class Event(models.Model):
             ),
         ]
 
+    def clean(self):
+        errors = {}
+        if self.end_datetime and self.start_datetime and self.end_datetime <= self.start_datetime:
+            errors["end_datetime"] = "End must follow start."
+        if (
+            self.registration_deadline
+            and self.start_datetime
+            and self.registration_deadline > self.start_datetime
+        ):
+            errors["registration_deadline"] = "Deadline must be before start."
+        if self.capacity is not None and self.capacity < 1:
+            errors["capacity"] = "Capacity must be positive."
+        if errors:
+            raise ValidationError(errors)
 
     def save(self, *args, **kwargs):
         self.slug = self.slug or f"{slugify(self.title)[:190]}-{uuid4().hex[:8]}"
