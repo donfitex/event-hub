@@ -76,6 +76,7 @@ USE_TZ = True
 USE_I18N = True
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+STATICFILES_DIRS = [BASE_DIR / "static"]
 MEDIA_URL = "/media/"
 MEDIA_ROOT = Path(os.getenv("MEDIA_ROOT", str(BASE_DIR / "media")))
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
@@ -137,3 +138,4 @@ NEON_AUTH_JWKS_URL = os.getenv("NEON_AUTH_JWKS_URL", "")
 PREVIEW_MODE = os.getenv("PREVIEW_MODE") == "1"
 REST_FRAMEWORK["DEFAULT_AUTHENTICATION_CLASSES"].insert(0, "apps.users.neon.NeonAuthentication")
 
+TEMPLATES[0]["OPTIONS"]["context_processors"].append("apps.common.context.deployment")
