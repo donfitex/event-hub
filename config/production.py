@@ -1,5 +1,6 @@
 from .base import *  # noqa
 from django.core.exceptions import ImproperlyConfigured
+from urllib.parse import urlsplit
 
 if len(SECRET_KEY) < 50 or not ALLOWED_HOSTS:
     raise ImproperlyConfigured(
@@ -49,3 +50,31 @@ STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
 }
+
+if endpoint := os.getenv("EVENT_IMAGE_S3_ENDPOINT"):
+    parsed = urlsplit(endpoint)
+    if (
+        parsed.scheme != "https"
+        or not parsed.hostname
+        or parsed.netloc != parsed.hostname
+        or parsed.path not in ("", "/")
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise ImproperlyConfigured("EVENT_IMAGE_S3_ENDPOINT must be an HTTPS origin.")
+    EVENT_IMAGE_ORIGIN = f"https://{parsed.hostname}"
+    STORAGES["default"] = {
+        "BACKEND": "storages.backends.s3.S3Storage",
+        "OPTIONS": {
+            "endpoint_url": EVENT_IMAGE_ORIGIN,
+            "bucket_name": os.environ["EVENT_IMAGE_S3_BUCKET"],
+            "access_key": os.environ["EVENT_IMAGE_S3_KEY_ID"],
+            "secret_key": os.environ["EVENT_IMAGE_S3_SECRET"],
+            "region_name": os.environ["EVENT_IMAGE_S3_REGION"],
+            "addressing_style": "path",
+            "signature_version": "s3v4",
+            "querystring_expire": 900,
+            "file_overwrite": False,
+        },
+    }
+    EVENT_IMAGE_UPLOADS_ENABLED = True

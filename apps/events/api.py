@@ -73,7 +73,7 @@ class EventSerializer(serializers.ModelSerializer):
     def validate(self, data):
         from django.conf import settings
 
-        if settings.PREVIEW_MODE and data.get("image"):
+        if not settings.EVENT_IMAGE_UPLOADS_ENABLED and data.get("image"):
             raise ValidationError({"image": "Uploads are disabled on the free preview host."})
         instance = self.instance or Event()
         candidate = Event()

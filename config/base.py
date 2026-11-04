@@ -140,6 +140,8 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 1024 * 1024
 NEON_AUTH_BASE_URL = os.getenv("NEON_AUTH_BASE_URL", "").rstrip("/")
 NEON_AUTH_JWKS_URL = os.getenv("NEON_AUTH_JWKS_URL", "")
 PREVIEW_MODE = os.getenv("PREVIEW_MODE") == "1"
+EVENT_IMAGE_UPLOADS_ENABLED = not PREVIEW_MODE
+EVENT_IMAGE_ORIGIN = ""
 REST_FRAMEWORK["DEFAULT_AUTHENTICATION_CLASSES"].insert(0, "apps.users.neon.NeonAuthentication")
 
 TEMPLATES[0]["OPTIONS"]["context_processors"].append("apps.common.context.deployment")

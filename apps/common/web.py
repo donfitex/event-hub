@@ -56,7 +56,11 @@ class Signin(LoginView):
 class EventForm(forms.ModelForm):
     def clean_image(self):
         image = self.cleaned_data.get("image")
-        if settings.PREVIEW_MODE and image and not getattr(image, "_committed", False):
+        if (
+            not settings.EVENT_IMAGE_UPLOADS_ENABLED
+            and image
+            and not getattr(image, "_committed", False)
+        ):
             raise forms.ValidationError("Uploads are disabled on the free preview host.")
         return image
 

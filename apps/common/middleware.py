@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.utils.cache import add_never_cache_headers
 
 
@@ -44,7 +45,7 @@ class Headers:
         response["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
         if not request.path.startswith(("/admin/", "/api/")):
             response["Content-Security-Policy"] = (
-                "default-src 'self'; img-src 'self' data:; script-src 'self'; style-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+                f"default-src 'self'; img-src 'self' data: {settings.EVENT_IMAGE_ORIGIN}; script-src 'self'; style-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
             )
         if (
             request.path.startswith("/api/")

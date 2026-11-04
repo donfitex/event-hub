@@ -34,4 +34,9 @@ variables or load a mounted secret file with `EVENTHUB_SECRET_FILE`.
 Use `python scripts/render_start.py` to migrate, initialize the database cache,
 collect static assets, and start Gunicorn. Set `WEB_CONCURRENCY=1` for the free instance.
 When Redis is absent the preview uses a dedicated PostgreSQL cache table.
-Image uploads and scheduled notification delivery are disabled on the free preview.
+Scheduled notification delivery requires a transactional sender and scheduler.
+
+For persistent event images, configure a private Neon Object Storage bucket. Set
+`EVENT_IMAGE_S3_ENDPOINT`, `EVENT_IMAGE_S3_BUCKET`, `EVENT_IMAGE_S3_REGION`,
+`EVENT_IMAGE_S3_KEY_ID`, and `EVENT_IMAGE_S3_SECRET` in Render. The app uses
+path-style S3 requests and 15-minute signed image URLs.
