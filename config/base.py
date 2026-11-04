@@ -24,6 +24,10 @@ INSTALLED_APPS = [
     "rest_framework.authtoken",
     "corsheaders",
     "drf_spectacular",
+    "apps.users",
+    "apps.events",
+    "apps.registrations",
+    "apps.common",
 ]
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
