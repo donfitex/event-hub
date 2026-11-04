@@ -34,6 +34,23 @@ def register(user, event_id):
     return registration
 
 
+@transaction.atomic
+def cancel(registration_id):
+    event_id = Registration.objects.values_list("event_id", flat=True).get(pk=registration_id)
+    event = lock_event(event_id)
+    registration = (
+        Registration.objects.select_for_update()
+        .select_related("user", "event")
+        .get(pk=registration_id)
+    )
+    if registration.status == "CANCELLED":
+        raise Conflict("Registration already cancelled.")
+    if event.start_datetime <= timezone.now():
+        raise Conflict("Cancellation is closed after the event starts.")
+    registration.status = "CANCELLED"
+    registration.cancelled_at = timezone.now()
+    registration.save()
+    return registration
 
 
 @transaction.atomic
