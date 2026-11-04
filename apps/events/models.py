@@ -4,6 +4,7 @@ from django.db import models
 from django.db.models import F, Q
 from django.core.exceptions import ValidationError
 from django.utils.text import slugify
+from django.templatetags.static import static
 from apps.common.validators import image_path, validate_image
 
 
@@ -58,6 +59,14 @@ class Event(models.Model):
                 name="deadline_before_start",
             ),
         ]
+
+    @property
+    def cover_url(self):
+        if self.image:
+            return self.image.url
+        if self.slug in {"demo-0", "demo-1", "demo-2"}:
+            return static(f"demo/{self.slug}.webp")
+        return ""
 
     def clean(self):
         errors = {}
